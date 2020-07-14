@@ -3,7 +3,7 @@
 /***********************************************************************
 *  This code is part of GLPK (GNU Linear Programming Kit).
 *
-*  Copyright (C) 2000, 2013 Andrew Makhorin, Department for Applied
+*  Copyright (C) 2000-2015 Andrew Makhorin, Department for Applied
 *  Informatics, Moscow Aviation Institute, Moscow, Russia. All rights
 *  reserved. E-mail: <mao@gnu.org>.
 *
@@ -41,6 +41,9 @@
 static void errfunc(const char *fmt, ...)
 {     ENV *env = get_env_ptr();
       va_list arg;
+#if 1 /* 07/XI-2015 */
+      env->err_st = 1;
+#endif
       env->term_out = GLP_ON;
       va_start(arg, fmt);
       xvprintf(fmt, arg);
@@ -61,6 +64,33 @@ glp_errfunc glp_error_(const char *file, int line)
       return errfunc;
 }
 
+#if 1 /* 07/XI-2015 */
+/***********************************************************************
+*  NAME
+*
+*  glp_at_error - check for error state
+*
+*  SYNOPSIS
+*
+*  int glp_at_error(void);
+*
+*  DESCRIPTION
+*
+*  The routine glp_at_error checks if the GLPK environment is at error
+*  state, i.e. if the call to the routine is (indirectly) made from the
+*  glp_error routine via an user-defined hook routine.
+*
+*  RETURNS
+*
+*  If the GLPK environment is at error state, the routine glp_at_error
+*  returns non-zero, otherwise zero. */
+
+int glp_at_error(void)
+{     ENV *env = get_env_ptr();
+      return env->err_st;
+}
+#endif
+
 /***********************************************************************
 *  NAME
 *
@@ -68,7 +98,6 @@ glp_errfunc glp_error_(const char *file, int line)
 *
 *  SYNOPSIS
 *
-*  #include "glplib.h"
 *  void glp_assert(int expr);
 *
 *  DESCRIPTION
@@ -118,6 +147,54 @@ void glp_error_hook(void (*func)(void *info), void *info)
          env->err_info = info;
       }
       return;
+}
+
+/***********************************************************************
+*  NAME
+*
+*  put_err_msg - provide error message string
+*
+*  SYNOPSIS
+*
+*  #include "env.h"
+*  void put_err_msg(const char *msg);
+*
+*  DESCRIPTION
+*
+*  The routine put_err_msg stores an error message string pointed to by
+*  msg to the environment block. */
+
+void put_err_msg(const char *msg)
+{     ENV *env = get_env_ptr();
+      int len;
+      len = strlen(msg);
+      if (len >= EBUF_SIZE)
+         len = EBUF_SIZE - 1;
+      memcpy(env->err_buf, msg, len);
+      if (len > 0 && env->err_buf[len-1] == '\n')
+         len--;
+      env->err_buf[len] = '\0';
+      return;
+}
+
+/***********************************************************************
+*  NAME
+*
+*  get_err_msg - obtain error message string
+*
+*  SYNOPSIS
+*
+*  #include "env.h"
+*  const char *get_err_msg(void);
+*
+*  RETURNS
+*
+*  The routine get_err_msg returns a pointer to an error message string
+*  previously stored by the routine put_err_msg. */
+
+const char *get_err_msg(void)
+{     ENV *env = get_env_ptr();
+      return env->err_buf;
 }
 
 /* eof */

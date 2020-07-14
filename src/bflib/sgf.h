@@ -3,7 +3,7 @@
 /***********************************************************************
 *  This code is part of GLPK (GNU Linear Programming Kit).
 *
-*  Copyright (C) 2012, 2013 Andrew Makhorin, Department for Applied
+*  Copyright (C) 2012-2013 Andrew Makhorin, Department for Applied
 *  Informatics, Moscow Aviation Institute, Moscow, Russia. All rights
 *  reserved. E-mail: <mao@gnu.org>.
 *
@@ -169,7 +169,7 @@ struct SGF
 /* remove j-th column of matrix V from active set C[len] */
 
 #define sgf_reduce_nuc _glp_sgf_reduce_nuc
-void sgf_reduce_nuc(LUF *luf, int *k1, int *k2, int cnt[/*1+n*/],
+int sgf_reduce_nuc(LUF *luf, int *k1, int *k2, int cnt[/*1+n*/],
       int list[/*1+n*/]);
 /* initial reordering to minimize nucleus size */
 

@@ -3,7 +3,7 @@
 /***********************************************************************
 *  This code is part of GLPK (GNU Linear Programming Kit).
 *
-*  Copyright (C) 2000, 2013 Andrew Makhorin, Department for Applied
+*  Copyright (C) 2000-2017 Andrew Makhorin, Department for Applied
 *  Informatics, Moscow Aviation Institute, Moscow, Russia. All rights
 *  reserved. E-mail: <mao@gnu.org>.
 *
@@ -20,6 +20,10 @@
 *  You should have received a copy of the GNU General Public License
 *  along with GLPK. If not, see <http://www.gnu.org/licenses/>.
 ***********************************************************************/
+
+#ifdef HAVE_CONFIG_H
+#include <config.h>
+#endif
 
 #include "glpk.h"
 #include "env.h"
@@ -65,8 +69,10 @@ int glp_init_env(void)
       if (env == NULL)
          return 2;
       memset(env, 0, sizeof(ENV));
+#if 0 /* 14/I-2017 */
       sprintf(env->version, "%d.%d",
          GLP_MAJOR_VERSION, GLP_MINOR_VERSION);
+#endif
       env->self = env;
       env->term_buf = malloc(TBUF_SIZE);
       if (env->term_buf == NULL)
@@ -77,14 +83,29 @@ int glp_init_env(void)
       env->term_hook = NULL;
       env->term_info = NULL;
       env->tee_file = NULL;
+#if 1 /* 23/XI-2015 */
+      env->err_st = 0;
+#endif
       env->err_file = NULL;
       env->err_line = 0;
       env->err_hook = NULL;
       env->err_info = NULL;
+      env->err_buf = malloc(EBUF_SIZE);
+      if (env->err_buf == NULL)
+      {  free(env->term_buf);
+         free(env);
+         return 2;
+      }
+      env->err_buf[0] = '\0';
       env->mem_limit = SIZE_T_MAX;
       env->mem_ptr = NULL;
       env->mem_count = env->mem_cpeak = 0;
       env->mem_total = env->mem_tpeak = 0;
+#if 1 /* 23/XI-2015 */
+      env->gmp_pool = NULL;
+      env->gmp_size = 0;
+      env->gmp_work = NULL;
+#endif
       env->h_odbc = env->h_mysql = NULL;
       /* save pointer to the environment block */
       tls_set_ptr(env);
@@ -155,9 +176,74 @@ ENV *get_env_ptr(void)
 *  the form "X.Y", where X is the major version number, and Y is the
 *  minor version number, for example, "4.16". */
 
+#define str(s) # s
+#define xstr(s) str(s)
+
 const char *glp_version(void)
+#if 0 /* 14/I-2017 */
 {     ENV *env = get_env_ptr();
       return env->version;
+}
+#else /* suggested by Heinrich */
+{     return
+         xstr(GLP_MAJOR_VERSION) "." xstr(GLP_MINOR_VERSION);
+}
+#endif
+
+/***********************************************************************
+*  NAME
+*
+*  glp_config - determine library configuration
+*
+*  SYNOPSIS
+*
+*  const char *glp_config(const char *option);
+*
+*  DESCRIPTION
+*
+*  The routine glp_config determines some options which were specified
+*  on configuring the GLPK library.
+*
+*  RETURNS
+*
+*  The routine glp_config returns a pointer to a null-terminating
+*  string depending on the option inquired.
+*
+*  For option = "TLS" the routine returns the thread local storage
+*  class specifier used (e.g. "_Thread_local") if the GLPK library was
+*  configured to run in multi-threaded environment, or NULL otherwise.
+*
+*  For option = "ODBC_DLNAME" the routine returns the name of ODBC
+*  shared library if this option was enabled, or NULL otherwise.
+*
+*  For option = "MYSQL_DLNAME" the routine returns the name of MySQL
+*  shared library if this option was enabled, or NULL otherwise. */
+
+const char *glp_config(const char *option)
+{     const char *s;
+      if (strcmp(option, "TLS") == 0)
+#ifndef TLS
+         s = NULL;
+#else
+         s = xstr(TLS);
+#endif
+      else if (strcmp(option, "ODBC_DLNAME") == 0)
+#ifndef ODBC_DLNAME
+         s = NULL;
+#else
+         s = ODBC_DLNAME;
+#endif
+      else if (strcmp(option, "MYSQL_DLNAME") == 0)
+#ifndef MYSQL_DLNAME
+         s = NULL;
+#else
+         s = MYSQL_DLNAME;
+#endif
+      else
+      {  /* invalid option is always disabled */
+         s = NULL;
+      }
+      return s;
 }
 
 /***********************************************************************
@@ -219,6 +305,7 @@ int glp_free_env(void)
       env->self = NULL;
       /* free memory allocated to the environment block */
       free(env->term_buf);
+      free(env->err_buf);
       free(env);
       /* reset a pointer to the environment block */
       tls_set_ptr(NULL);

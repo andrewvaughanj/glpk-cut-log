@@ -5,7 +5,7 @@
 *
 *  Author: Giorgio Sartor <0gioker0@gmail.com>.
 *
-*  Copyright (C) 2013 Andrew Makhorin, Department for Applied
+*  Copyright (C) 2013, 2016 Andrew Makhorin, Department for Applied
 *  Informatics, Moscow Aviation Institute, Moscow, Russia. All rights
 *  reserved. E-mail: <mao@gnu.org>.
 *
@@ -135,6 +135,9 @@
 #define RINF             1e38
 #define MAXVAL           1e20
 #define MINVAL          -1e20
+#if 0 /* by gioker */
+    #define PROXY_DEBUG
+#endif
 
 /**********************************************************************/
 /* 3. GLOBAL VARIABLES                                                */
@@ -207,7 +210,7 @@ int proxy(glp_prob *lp, double *zfinal, double *xfinal,
     glp_iocp parm;
     glp_smcp parm_lp;
     size_t tpeak;
-    int refine, tref_lim, err, cutoff_row, niter, status, i;
+    int refine, tref_lim, err, cutoff_row, niter, status, i, tout;
     double *xref, *xstar, zstar, tela, cutoff, zz;
 
     memset(csa, 0, sizeof(struct csa));
@@ -311,7 +314,7 @@ int proxy(glp_prob *lp, double *zfinal, double *xfinal,
 
     /* finding the first solution */
     if (verbose) {
-        xprintf("Searching for a feasbile solution...\n");
+        xprintf("Searching for a feasible solution...\n");
     }
 
     /* verifying the existence of an input starting solution */
@@ -324,9 +327,9 @@ int proxy(glp_prob *lp, double *zfinal, double *xfinal,
         }
     }
 
-    glp_term_out(GLP_OFF);
+    tout = glp_term_out(GLP_OFF);
     err = glp_simplex(lp,&parm_lp);
-    glp_term_out(GLP_ON);
+    glp_term_out(tout);
 
     status = glp_get_status(lp);
 
@@ -361,9 +364,9 @@ int proxy(glp_prob *lp, double *zfinal, double *xfinal,
     parm.tm_lim = tlim - tela*1000;
     tref_lim = (tlim - tela *1000) / 20;
 
-    glp_term_out(GLP_OFF);
+    tout = glp_term_out(GLP_OFF);
     err = glp_intopt(lp, &parm);
-    glp_term_out(GLP_ON);
+    glp_term_out(tout);
 
     status = glp_mip_status(lp);
 
@@ -464,12 +467,15 @@ int proxy(glp_prob *lp, double *zfinal, double *xfinal,
             }
             goto done;
         }
-
+#ifdef PROXY_DEBUG
+        xprintf("TELA = %3.1lf\n",tela*1000);
+        xprintf("TLIM = %3.1lf\n",tlim - tela*1000);
+#endif
         parm_lp.tm_lim = tlim -tela*1000;
 
-        glp_term_out(GLP_OFF);
+        tout = glp_term_out(GLP_OFF);
         err = glp_simplex(lp,&parm_lp);
-        glp_term_out(GLP_ON);
+        glp_term_out(tout);
 
         status = glp_get_status(lp);
 
@@ -504,9 +510,9 @@ int proxy(glp_prob *lp, double *zfinal, double *xfinal,
          to proxy is already preprocessed */
         parm.presolve = GLP_ON;
 #endif
-        glp_term_out(GLP_OFF);
+        tout = glp_term_out(GLP_OFF);
         err = glp_intopt(lp, &parm);
-        glp_term_out(GLP_ON);
+        glp_term_out(tout);
 
         /********** MANAGEMENT OF THE SOLUTION **********/
 
@@ -945,9 +951,9 @@ static int do_refine(struct csa *csa, glp_prob *lp_ref, int ncols,
      an LP. Otherwise, it remains a MIP but of smaller size.
      */
 
-    int j;
+    int j, tout;
     double refineStart = second();
-    double val, tela;
+    double val, tela, tlimit;
 
     if ( glp_get_num_cols(lp_ref) != ncols ) {
         if (verbose) {
@@ -992,14 +998,14 @@ static int do_refine(struct csa *csa, glp_prob *lp_ref, int ncols,
 #ifdef PROXY_DEBUG
         xprintf("***** REFINING *****\n");
 #endif
-        glp_term_out(GLP_OFF);
+        tout = glp_term_out(GLP_OFF);
         if (csa->i_vars_exist == TRUE) {
             err = glp_intopt(lp_ref, &parm_ref);
         }
         else {
             err = glp_simplex(lp_ref, &parm_ref_lp);
         }
-        glp_term_out(GLP_ON);
+        glp_term_out(tout);
 
         if (csa->i_vars_exist == TRUE) {
             status = glp_mip_status(lp_ref);
@@ -1007,6 +1013,18 @@ static int do_refine(struct csa *csa, glp_prob *lp_ref, int ncols,
         else {
             status = glp_get_status(lp_ref);
         }
+
+#if 1 /* 29/II-2016 by mao as reported by Chris */
+      switch (status)
+      {  case GLP_OPT:
+         case GLP_FEAS:
+            break;
+         default:
+            status = GLP_UNDEF;
+            break;
+      }
+#endif
+
 #ifdef PROXY_DEBUG
         xprintf("STATUS REFINING = %d\n",status);
 #endif
@@ -1029,9 +1047,10 @@ static int do_refine(struct csa *csa, glp_prob *lp_ref, int ncols,
             }
         }
     }
-
     tela = second() - refineStart;
-    *tlim = *tlim - tela*1000;
+#ifdef PROXY_DEBUG
+    xprintf("REFINE TELA = %3.1lf\n",tela*1000);
+#endif
     return 0;
 }
 /**********************************************************************/

@@ -3,7 +3,7 @@
 /***********************************************************************
 *  This code is part of GLPK (GNU Linear Programming Kit).
 *
-*  Copyright (C) 2000, 2013 Andrew Makhorin, Department for Applied
+*  Copyright (C) 2000-2017 Andrew Makhorin, Department for Applied
 *  Informatics, Moscow Aviation Institute, Moscow, Russia. All rights
 *  reserved. E-mail: <mao@gnu.org>.
 *
@@ -35,14 +35,19 @@ typedef struct MBD MBD;
 #define TBUF_SIZE 4096
 /* terminal output buffer size, in bytes */
 
+#define EBUF_SIZE 1024
+/* error message buffer size, in bytes */
+
 /* enable/disable flag: */
 #define GLP_ON  1
 #define GLP_OFF 0
 
 struct ENV
 {     /* GLPK environment block */
+#if 0 /* 14/I-2007 */
       char version[7+1];
       /* version string returned by the routine glp_version */
+#endif
       ENV *self;
       /* pointer to this block to check its validity */
       /*--------------------------------------------------------------*/
@@ -59,6 +64,10 @@ struct ENV
       /* output stream used to copy terminal output */
       /*--------------------------------------------------------------*/
       /* error handling */
+#if 1 /* 07/XI-2015 */
+      int err_st;
+      /* error state flag; set on entry to glp_error */
+#endif
       const char *err_file;
       /* value of the __FILE__ macro passed to glp_error */
       int err_line;
@@ -67,11 +76,13 @@ struct ENV
       /* user-defined routine to intercept abnormal termination */
       void *err_info;
       /* transit pointer (cookie) passed to the routine err_hook */
+      char *err_buf; /* char err_buf[EBUF_SIZE]; */
+      /* buffer to store error messages (used by I/O routines) */
       /*--------------------------------------------------------------*/
       /* dynamic memory allocation */
       size_t mem_limit;
       /* maximal amount of memory, in bytes, available for dynamic
-         allocation */
+       * allocation */
       MBD *mem_ptr;
       /* pointer to the linked list of allocated memory blocks */
       int mem_count;
@@ -80,11 +91,21 @@ struct ENV
       /* peak value of mem_count */
       size_t mem_total;
       /* total amount of currently allocated memory, in bytes; it is
-         the sum of the size field over all memory block descriptors */
+       * the sum of the size field over all memory block descriptors */
       size_t mem_tpeak;
       /* peak value of mem_total */
+#if 1 /* 23/XI-2015 */
       /*--------------------------------------------------------------*/
-      /* shared libraries support (optional) */
+      /* bignum module working area */
+      void *gmp_pool; /* DMP *gmp_pool; */
+      /* working memory pool */
+      int gmp_size;
+      /* size of working array */
+      unsigned short *gmp_work; /* ushort gmp_work[gmp_size]; */
+      /* working array */
+#endif
+      /*--------------------------------------------------------------*/
+      /* dynamic linking support (optional) */
       void *h_odbc;
       /* handle to ODBC shared library */
       void *h_mysql;
@@ -156,6 +177,14 @@ void glp_assert_(const char *expr, const char *file, int line);
 void glp_error_hook(void (*func)(void *info), void *info);
 /* install hook to intercept abnormal termination */
 
+#define put_err_msg _glp_put_err_msg
+void put_err_msg(const char *msg);
+/* provide error message string */
+
+#define get_err_msg _glp_get_err_msg
+const char *get_err_msg(void);
+/* obtain error message string */
+
 #define xmalloc(size) glp_alloc(1, size)
 /* allocate memory block (obsolete) */
 
@@ -185,6 +214,41 @@ void glp_mem_usage(int *count, int *cpeak, size_t *total,
       size_t *tpeak);
 /* get memory usage information */
 
+typedef struct glp_file glp_file;
+/* sequential stream descriptor */
+
+#define glp_open _glp_open
+glp_file *glp_open(const char *name, const char *mode);
+/* open stream */
+
+#define glp_eof _glp_eof
+int glp_eof(glp_file *f);
+/* test end-of-file indicator */
+
+#define glp_ioerr _glp_ioerr
+int glp_ioerr(glp_file *f);
+/* test I/O error indicator */
+
+#define glp_read _glp_read
+int glp_read(glp_file *f, void *buf, int nnn);
+/* read data from stream */
+
+#define glp_getc _glp_getc
+int glp_getc(glp_file *f);
+/* read character from stream */
+
+#define glp_write _glp_write
+int glp_write(glp_file *f, const void *buf, int nnn);
+/* write data to stream */
+
+#define glp_format _glp_format
+int glp_format(glp_file *f, const char *fmt, ...);
+/* write formatted data to stream */
+
+#define glp_close _glp_close
+int glp_close(glp_file *f);
+/* close stream */
+
 #define xtime glp_time
 double glp_time(void);
 /* determine current universal time */
@@ -193,14 +257,17 @@ double glp_time(void);
 double glp_difftime(double t1, double t0);
 /* compute difference between two time values */
 
-#define xdlopen _glp_xdlopen
+#define xdlopen _glp_dlopen
 void *xdlopen(const char *module);
+/* open dynamically linked library */
 
-#define xdlsym _glp_xdlsym
+#define xdlsym _glp_dlsym
 void *xdlsym(void *h, const char *symbol);
+/* obtain address of symbol from dynamically linked library */
 
-#define xdlclose _glp_xdlclose
+#define xdlclose _glp_dlclose
 void xdlclose(void *h);
+/* close dynamically linked library */
 
 #endif
 
